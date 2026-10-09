@@ -1,89 +1,72 @@
 # demo-api
 
-Le fil rouge des quêtes Docker : une mini-API "catalogue" que tu vas
-conteneuriser, faire persister, mettre en réseau, orchestrer et sécuriser,
-une quête à la fois.
+Mini API « catalogue » (Node + Express + PostgreSQL), conteneurisée et orchestrée avec Docker Compose. Fil rouge des quêtes Docker.
 
-Le métier est volontairement trivial (`Node` + `Express` + `PostgreSQL`,
-un catalogue de produits) : toute la difficulté est sur **Docker**, jamais
-sur le code applicatif.
+La stack se compose de trois services :
 
-## Point de départ
+| Service | Image | Rôle | Accès |
+|---|---|---|---|
+| `api` | construite depuis `./api` | API REST (`/health`, `/products`) | http://localhost:8080 |
+| `db` | `postgres:16-alpine` | base de données, volume `pgdata` | réseau interne uniquement (aucun port publié) |
+| `adminer` | `adminer:4` | client SQL web | http://localhost:8081 |
 
-Ce dossier est ce que tu clones **avant ta première quête Docker**. Il n'y a
-volontairement **aucun fichier Docker** dedans, ni `Dockerfile`, ni
-`compose.yml` : ce sont précisément les fichiers que tu vas écrire, quête
-après quête, en faisant grossir ce dépôt.
+## Prérequis
 
-Sans conteneur, cette API ne démarre pas telle quelle : elle a besoin d'un
-PostgreSQL joignable pour répondre. C'est normal, et c'est tout le sujet de
-la première quête que de la faire tourner dans Docker.
+- Docker avec Compose v2 (`docker compose version`)
+- Windows : travailler depuis WSL (bind mount de `db/init.sql`)
 
-## Récupérer ce starter dans ton propre repo
+## Démarrage
 
-Ce dépôt est un **starter en lecture seule** : tu ne pousses jamais
-directement ici. Avant de démarrer la première quête :
+```bash
+cp .env.example .env                                   # variables non sensibles
+mkdir -p secrets
+openssl rand -hex 16 > secrets/db_password.txt         # mot de passe de la base (hors Git)
+docker compose up -d --build
+```
 
-1. **Clone** ce repo starter :
-   ```bash
-   git clone git@github.com:ynov-x-anthony/docker-demo-api-starter.git NOM_prenom_demo-api
-   cd NOM_prenom_demo-api
-   ```
-2. **Supprime le remote `origin`** (il pointe vers le starter, pas vers toi) :
-   ```bash
-   git remote remove origin
-   ```
-3. **Crée ton propre repo** sur GitHub, dans l'organisation `ynov-x-anthony`,
-   en respectant la nomenclature **`NOM_prenom_demo-api`** (ex. :
-   `DUPONT_jean_demo-api`), puis ajoute-le comme nouveau remote et pousse :
-   ```bash
-   git remote add origin git@github.com:ynov-x-anthony/NOM_prenom_demo-api.git
-   git push -u origin main
-   ```
+Le mot de passe n'est ni dans `.env` ni dans `compose.yml` : il passe par **Docker Secrets** (`secrets/db_password.txt`, monté dans `/run/secrets/db_password`). Le service `db` le lit via `POSTGRES_PASSWORD_FILE` ; le service `api` le lit au démarrage et l'exporte en `PGPASSWORD`, sans modifier le code applicatif.
 
-À partir de là, c'est **ton** repo : chaque quête s'y ajoute par des commits,
-et c'est lui qui sera évalué, pas le starter.
+`.env` et `secrets/` sont ignorés par Git. Seul `.env.example` est commité.
 
-## Ce que contient le repo
+## Vérifier
 
-| Fichier | Rôle |
-|---|---|
-| `api/server.js` | l'API Express (`/`, `/version`, `/health`, `/ready`, `/products`) |
-| `api/db.js` | connexion PostgreSQL, entièrement pilotée par des variables d'environnement |
-| `api/package.json`, `api/package-lock.json` | dépendances (`express`, `pg`) |
-| `db/init.sql` | création de la table `products` + quelques données de démo |
+```bash
+docker compose ps
+curl -s localhost:8080/health
+curl -s localhost:8080/products
+curl -s -X POST -H 'content-type: application/json' \
+  -d '{"name":"Gourde","price_cents":900}' localhost:8080/products
+```
 
-## Les routes de l'API
+Adminer : http://localhost:8081 (système : PostgreSQL, serveur : `db`, utilisateur et base : valeurs de `.env`, mot de passe : contenu de `secrets/db_password.txt`).
 
-| Méthode | Route | Effet |
+Commande testée : `docker compose up -d --build`. Extrait de `docker compose ps` :
+
+```
+NAME                 IMAGE                COMMAND                  SERVICE   STATUS                    PORTS
+demo-api-adminer-1   adminer:4            "entrypoint.sh docke…"   adminer   Up 20 seconds             0.0.0.0:8081->8080/tcp, [::]:8081->8080/tcp
+demo-api-api-1       demo-api-api         "sh -c 'export PGPAS…"   api       Up 15 seconds (healthy)   0.0.0.0:8080->3000/tcp, [::]:8080->3000/tcp
+demo-api-db-1        postgres:16-alpine   "docker-entrypoint.s…"   db        Up 20 seconds (healthy)   5432/tcp
+```
+
+## Persistance
+
+Les données vivent dans le volume nommé `pgdata`. `docker compose down` supprime les conteneurs et le réseau mais **garde les volumes** : après un `down` puis un `up`, les produits ajoutés sont toujours là (testé avec « Gourde »).
+
+## Arrêter et repartir de zéro
+
+```bash
+docker compose down        # arrête et supprime les conteneurs, GARDE les données
+docker compose down -v     # supprime aussi le volume pgdata : données perdues, init.sql rejoué
+```
+
+`init.sql` n'est joué qu'au tout premier démarrage de la base (volume vide). Après `down -v`, il est rejoué.
+
+## Variables (`.env`)
+
+| Variable | Rôle | Défaut |
 |---|---|---|
-| `GET` | `/` | infos application + version |
-| `GET` | `/version` | numéro de version courant |
-| `GET` | `/health` | liveness, ne touche pas la base |
-| `GET` | `/ready` | readiness, teste la connexion à la base |
-| `GET` | `/products` | liste des produits |
-| `POST` | `/products` | crée un produit : `{ "name": "...", "price_cents": 1234 }` |
-
-## Ta progression, quête après quête
-
-| Quête | Ce que tu ajoutes au repo |
-|---|---|
-| Découverte de Docker | rien ici, tu manipules des images publiques et un `psql` en conteneur |
-| Le Dockerfile | `api/Dockerfile`, `api/.dockerignore` : l'API tourne enfin dans un conteneur |
-| Les volumes | un volume nommé pour la persistance de PostgreSQL |
-| Les réseaux | des réseaux dédiés, la base jamais exposée directement |
-| Compose | `compose.yml`, `.env.example` : tous les services démarrent ensemble |
-| Dockerfile et sécurité | ton `Dockerfile` durci : utilisateur non-root, `HEALTHCHECK` |
-| Builds multi-étapes et gestion des secrets | `api/Dockerfile.multi` : image allégée, secrets hors de l'image |
-| Analyse de vulnérabilité avec Trivy | un pipeline CI qui scanne ton image et bloque sur les failles critiques |
-
-## Prérequis machine (macOS / Linux / Windows)
-
-- **Docker Engine + Compose v2** : le plugin intégré, invoqué en deux mots
-  `docker compose` (pas l'ancien binaire autonome `docker-compose` v1).
-  `docker compose version` doit répondre `v2.x` ou une version supérieure
-  (v3, v4, v5…). Ce qui compte, c'est que ce ne soit pas du v1 legacy.
-- macOS / Windows : **Docker Desktop** (ou Colima / Rancher Desktop).
-  Sous Windows, backend **WSL 2** : travaille depuis un terminal **WSL**.
-- `git`, `curl`. Node est nécessaire **seulement** si tu régénères
-  `package-lock.json` (`cd api && npm install`, déjà commité ici).
+| `POSTGRES_USER` | utilisateur PostgreSQL | `demo` |
+| `POSTGRES_DB` | nom de la base | `demo` |
+| `API_PORT` | port hôte de l'API | `8080` |
+| `ADMINER_PORT` | port hôte d'Adminer | `8081` |
