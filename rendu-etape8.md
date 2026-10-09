@@ -3,8 +3,12 @@
 ## Liens
 
 - Repo : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api (contient `.github/workflows/ci.yml` et `api/Dockerfile.multi`)
-- Run GitHub Actions **rouge** (régression volontaire, base `node:22.11-alpine`) : `À COMPLÉTER`
-- Run GitHub Actions **vert** (base corrigée) : `À COMPLÉTER`
+- Run GitHub Actions **rouge** (tag `v1.1.1`, régression volontaire, base `node:22.11-alpine`) : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/actions/runs/37905276401
+  - échoue à l'étape **Scan Trivy (gate)** : `Total: 21 (HIGH: 19, CRITICAL: 2)` sur `alpine 3.20.3`, `exit code 1` (le même commit sur `main` : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/actions/runs/37905274338)
+- Run GitHub Actions **vert** (tag `v1.1.2`, base corrigée `node:22.23.3-alpine3.24`) : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/actions/runs/37905281441
+  - le même commit sur `main` : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/actions/runs/37905279342
+
+Les runs plus anciens (tag `v1.0.0` et les premiers commits) sont rouges pour une autre raison : la référence `aquasecurity/trivy-action@0.28.0` du cours n'existe pas (le tag est `v0.28.0`), le job s'arrêtait avant le build. Corrigé en épinglant l'action sur le SHA de `v0.36.0`.
 
 ## Scan avant : `trivy image --severity HIGH,CRITICAL demo-api:multi` (`scan-avant.txt`)
 
@@ -95,7 +99,7 @@ jobs:
           tags: demo-api:ci
 
       - name: Scan Trivy (gate)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: demo-api:ci
           severity: CRITICAL,HIGH
