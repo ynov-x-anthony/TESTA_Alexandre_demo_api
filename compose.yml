@@ -1,6 +1,7 @@
 services:
   api:
     build: ./api
+    image: ghcr.io/ynov-x-anthony/testa_alexandre_demo_api/api:${TAG:-dev}
     entrypoint:
       - sh
       - -c
@@ -9,6 +10,7 @@ services:
       PGHOST: db
       PGUSER: ${POSTGRES_USER}
       PGDATABASE: ${POSTGRES_DB}
+      NOTIFIER_PORT: "4000"
     secrets:
       - db_password
     ports:
@@ -16,6 +18,16 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks: [front, back]
+    restart: unless-stopped
+
+  notifier:
+    build: ./notifier
+    image: ghcr.io/ynov-x-anthony/testa_alexandre_demo_api/notifier:${TAG:-dev}
+    environment:
+      PORT: "4000"
+    # Pas de ports: ni de reseau front, seule api l'appelle via le reseau back.
+    networks: [back]
     restart: unless-stopped
 
   db:
@@ -34,6 +46,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks: [back]
     restart: unless-stopped
 
   adminer:
@@ -42,7 +55,12 @@ services:
       - "${ADMINER_PORT:-8081}:8080"
     depends_on:
       - db
+    networks: [back]
     restart: unless-stopped
+
+networks:
+  front:
+  back:
 
 volumes:
   pgdata:
