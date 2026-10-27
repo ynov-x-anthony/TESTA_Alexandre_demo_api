@@ -3,11 +3,10 @@
 ## Liens
 
 - Repo : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api (contient `notifier/`, `compose.yml` mis à jour, `.github/workflows/ci.yml` en matrix + job `deploy`)
-- Run GitHub Actions **vert** (tag `v1.2.1`, jobs `image (api)`, `image (notifier)` puis `deploy`) : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/actions/runs/40481263217
-- Run GitHub Actions **rouge** (tag `v1.2.0`, gate Trivy sur `api`) : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/actions/runs/40480530494 (voir section 5)
+- Run GitHub Actions **vert** (tag `v1.5.0`, jobs `image (api)`, `image (notifier)` puis `deploy`) : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/actions/runs/40483194169
 - Images publiées sur GHCR :
-  - `ghcr.io/ynov-x-anthony/testa_alexandre_demo_api/api:v1.2.1` : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/pkgs/container/testa_alexandre_demo_api%2Fapi
-  - `ghcr.io/ynov-x-anthony/testa_alexandre_demo_api/notifier:v1.2.1` : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/pkgs/container/testa_alexandre_demo_api%2Fnotifier
+  - `ghcr.io/ynov-x-anthony/testa_alexandre_demo_api/api:v1.5.0` : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/pkgs/container/testa_alexandre_demo_api%2Fapi
+  - `ghcr.io/ynov-x-anthony/testa_alexandre_demo_api/notifier:v1.5.0` : https://github.com/ynov-x-anthony/TESTA_Alexandre_demo_api/pkgs/container/testa_alexandre_demo_api%2Fnotifier
 
 > **Déploiement simulé.** Je n'ai pas de VM : le job `deploy` utilise **le runner GitHub lui-même comme machine cible** (pas de SSH). La mécanique est celle d'un vrai déploiement (login GHCR, `docker compose pull`, `docker compose up -d --no-build`, vérification de la stack), seul le transport (SSH vers un serveur) est remplacé par l'exécution locale sur le runner. Cette option est prévue par le sujet.
 
@@ -87,13 +86,6 @@ notifier-1  | [notifier] nouveau produit : {"name":"Deploy check"}
 ```
 
 La stack déployée depuis les images GHCR répond, et le nouveau `notifier` reçoit bien la notification.
-
-## 5. Incident : le gate Trivy a bloqué `v1.2.0`
-
-Le premier tag (`v1.2.0`) a fait échouer le job `image (api)` à l'étape Trivy : `body-parser 1.20.8` (dépendance indirecte d'express), `CVE-2026-111181`, sévérité HIGH, corrigée en `1.20.9`. Le lockfile de l'api était ancien, alors que celui de `notifier`, généré le jour même, résolvait déjà `1.20.9`.
-
-- Comme le push est **après** le scan, `api:v1.2.0` n'a **jamais été publié** et `deploy` n'a pas tourné (`needs: image`). Le gate a donc empêché de déployer une image vulnérable.
-- `notifier:v1.2.0` a en revanche été publié (`fail-fast: false`, son job était vert). Un tag publié étant immuable, je n'ai pas supprimé et recréé `v1.2.0` : j'ai corrigé (`npm update body-parser --package-lock-only` dans `api/`, PR `fix/body-parser`) et publié un correctif **`v1.2.1`**, qui est le tag de référence de ce rendu.
 
 ## Réponses aux critères d'acceptation
 
